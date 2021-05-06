@@ -321,7 +321,7 @@ class TabooRoom(GamePlugin):
 
     def _clientInfo(self):
         return {tmNr:
-                    {plyr.name:plyr.nrofConns
+                    {plyr.name:plyr.numConns()
                       for plyr in tm.members.values()
                     }
                     for (tmNr, tm) in self.teams.items()

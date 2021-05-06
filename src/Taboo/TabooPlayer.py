@@ -39,6 +39,5 @@ class TabooPlayer:
     def ready(self, flag):
         self.__ready = flag
 
-    @property
-    def nrofConns(self):
+    def numConns(self):
         return self.playerConns.count()
