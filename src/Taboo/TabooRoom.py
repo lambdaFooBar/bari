@@ -59,13 +59,16 @@ class TabooRoom(GamePlugin):
         """Invoked to update the lobby of the game instance (room) status
 
                ["GAME-STATUS", <path:str>, {"gameState": <str>,
-                                            "clientCount": <str>,
-                                            "spectatorCount": <int>,
-                                            "hostParams": <dict>}]
+                                            "clientCount": {
+                                                teamId<int>:{plyrName<str>:clientCount<int>}
+                                            },
+                                            "hostParams": <dict>,
+                                            "winners":[winnerTeam<int>,...]}]
         """
         jmsg = [{"hostParameters": self.hostParameters.toJmsg()[0],
                  "gameState": self.state.name,
-                 "clientCount": self.conns.count()}]
+                 "clientCount": self._clientInfo(),
+                "winners": self._winnerInfo()}]
         self.txQueue.put_nowait(InternalGiStatus(jmsg, self.path))
 
     def postQueueSetup(self):
@@ -200,7 +203,6 @@ class TabooRoom(GamePlugin):
                                                 {ws}, initiatorWs=ws))
             return True
 
-        # No need to do this, right?
         #if self.state != GameState.WAITING_TO_START:
         #    self.txQueue.put_nowait(ClientTxMsg(["READY-BAD", "Game already started/ended"],
         #                            {ws}, initiatorWs=ws))
@@ -209,6 +211,11 @@ class TabooRoom(GamePlugin):
         player = self.playerByWs.get(ws, None)
         if not player:
             self.txQueue.put_nowait(ClientTxMsg(["READY-BAD", "Join first"],
+                                    {ws}, initiatorWs=ws))
+            return True
+
+        if player.ready:
+            self.txQueue.put_nowait(ClientTxMsg(["READY-BAD", "Already ready"],
                                     {ws}, initiatorWs=ws))
             return True
 
@@ -261,6 +268,8 @@ class TabooRoom(GamePlugin):
         if not player:
             team = self.__getTeam(teamNumber)
             player = TabooPlayer(self.txQueue, playerName, team)
+            #A late-joinee joins in ready state
+            player.ready = self.state != GameState.WAITING_TO_START
             self.__finalizeJoin(ws, player)
             #self.processEvent(PlayerJoin(player))
             return True
@@ -305,7 +314,20 @@ class TabooRoom(GamePlugin):
         trace(Level.game, "Game Over")
         self.state = GameState.GAME_OVER
         self.gameOverMsgSrc.setMsgs([
-            Jmai(["GAME-OVER"], None), # TODO: add winning team IDs # pylint: disable=fixme
+            Jmai(["GAME-OVER", self._winnerInfo()], None),
         ])
 
         self.publishGiStatus()
+
+    def _clientInfo(self):
+        return {tmNr:
+                    {plyr.name:plyr.nrofConns
+                      for plyr in tm.members.values()
+                    }
+                    for (tmNr, tm) in self.teams.items()
+                }
+
+    def _winnerInfo(self):
+        if self.state == GameState.GAME_OVER:
+            return []  # TODO: add winning team IDs # pylint: disable=fixme
+        return []

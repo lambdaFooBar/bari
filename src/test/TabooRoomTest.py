@@ -73,7 +73,8 @@ class TabooRoomTest(unittest.TestCase, MsgTestLib):
                                     "wordSets": ["test"],
                                     "numTurns": 1},
                  "gameState": "WAITING_TO_START",
-                 "clientCount": 0}
+                 "clientCount": {1: {}, 2: {}},
+                 "winners": []}
             ], "taboo:1"),
         ], anyOrder=True)
 
@@ -91,7 +92,9 @@ class TabooRoomTest(unittest.TestCase, MsgTestLib):
                                     "wordSets": ["test"],
                                     "numTurns": 1},
                  "gameState": "WAITING_TO_START",
-                 "clientCount": 1}
+                 "clientCount": {1: {}, 2: {}},
+                 "winners":[]
+                }
             ], "taboo:1"),
         ], anyOrder=True)
 
@@ -268,9 +271,11 @@ class TabooRoomTest(unittest.TestCase, MsgTestLib):
         self.assertGiTxQueueMsgs(env.txq, [])
         self.assertEqual(env.room.state, TabooRoom.GameState.WAITING_TO_START)
 
-        #If a player sends READY multiple times, it will be silently ignored
+        #If a player sends READY multiple times, it is replied with a READY-BAD
         env.room.processMsg(ClientRxMsg(["READY"], 101))
-        self.assertGiTxQueueMsgs(env.txq, [])
+        self.assertGiTxQueueMsgs(env.txq, [
+            ClientTxMsg(['READY-BAD', 'Already ready'], {101}, 101)
+        ])
 
         #READY from last of the (initial) players trigger start of the game
         env.room.processMsg(ClientRxMsg(["READY"], 202))
@@ -279,12 +284,13 @@ class TabooRoomTest(unittest.TestCase, MsgTestLib):
         ])
         self.assertEqual(env.room.state, TabooRoom.GameState.RUNNING)
 
-        #A late-joinee gets into the game the same way as the initial players
-        #i.e., JOIN followed by READY
+        #A late-joinee is connected in READY state when it joins
         self.setUpTeamPlayer(env, 1, "sb3", [103])
         self.drainGiTxQueue(env.txq)
         env.room.processMsg(ClientRxMsg(["READY"], 103))
-        self.assertGiTxQueueMsgs(env.txq, [])
+        self.assertGiTxQueueMsgs(env.txq, [
+            ClientTxMsg(['READY-BAD', 'Already ready'], {103}, 103)
+        ])
 
     def testTurnTimeOut(self):
         env = self.setUpTabooRoom()
@@ -351,14 +357,16 @@ class TabooRoomTest(unittest.TestCase, MsgTestLib):
                      'score': [2]}]
         self.assertGiTxQueueMsgs(env.txq, [
             ClientTxMsg(publicMsg, {101, 102, 201, 202}),
-            ClientTxMsg(["GAME-OVER"], {101, 102, 201, 202}),
+            ClientTxMsg(["GAME-OVER", []], {101, 102, 201, 202}),
             InternalGiStatus([
                 {"hostParameters": {"numTeams": 2,
                                     "turnDurationSec": 30,
                                     "wordSets": ["test"],
                                     "numTurns": 1},
                  "gameState": "GAME_OVER",
-                 "clientCount": 4}
+                 "clientCount": {1: {'sb1': 1, 'sb2': 1}, 2: {'jg1': 1, 'jg2': 1}},
+                 "winners": []
+                }
             ], "taboo:1"),
         ], anyOrder=True)
 
@@ -445,7 +453,7 @@ class TabooRoomTest(unittest.TestCase, MsgTestLib):
                                         "disallowed": ["b1", "b2"],
                                         "score": [1]}],
                         {101, 102, 201, 202}),
-            ClientTxMsg(["GAME-OVER"],
+            ClientTxMsg(["GAME-OVER", []],
                         {101, 102, 201, 202}),
             InternalGiStatus([
                 {"hostParameters": {"numTeams": 2,
@@ -453,7 +461,9 @@ class TabooRoomTest(unittest.TestCase, MsgTestLib):
                                     "wordSets": ["test"],
                                     "numTurns": 1},
                  "gameState": "GAME_OVER",
-                 "clientCount": 4}
+                 "clientCount": {1: {'sb1': 1, 'sb2': 1}, 2: {'jg1': 1, 'jg2': 1}},
+                 "winners": []
+                }
             ], "taboo:1"),
         ], anyOrder=True)
 
